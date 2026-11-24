@@ -100,8 +100,8 @@ public class GenieConPty {
       COORD size = new COORD(); size.X = (short)cols; size.Y = (short)rows;
       int hr = CreatePseudoConsole(size, inRead, outWrite, 0, out hPC);
       if (hr != 0) throw new Exception("CreatePseudoConsole failed: 0x" + hr.ToString("X8"));
-      CloseHandle(inRead); inRead = IntPtr.Zero;
-      CloseHandle(outWrite); outWrite = IntPtr.Zero;
+      // 官方规范：这两个句柄必须等 CreateProcess 成功后再释放。
+      // 提前关闭会让子进程不绑定伪控制台，banner/prompt 直接写回父进程 stdout。
 
       InitializeProcThreadAttributeList(IntPtr.Zero, 1, 0, ref attrSize);
       attrList = Marshal.AllocHGlobal(attrSize);
@@ -111,9 +111,12 @@ public class GenieConPty {
 
       siex.si.cb = Marshal.SizeOf(typeof(STARTUPINFOEX));
       siex.lpAttributeList = attrList;
-      ok = CreateProcess(null, commandLine, IntPtr.Zero, IntPtr.Zero, true,
+      ok = CreateProcess(null, commandLine, IntPtr.Zero, IntPtr.Zero, false,
         EXTENDED_STARTUPINFO_PRESENT | CREATE_UNICODE_ENVIRONMENT, IntPtr.Zero, cwd, ref siex, out pi);
       if (!ok) throw new Exception("CreateProcess failed: " + Marshal.GetLastWin32Error());
+      // 子进程已创建：现在才能释放 CreatePseudoConsole 用的两个端点。
+      CloseHandle(inRead); inRead = IntPtr.Zero;
+      CloseHandle(outWrite); outWrite = IntPtr.Zero;
       if (Environment.GetEnvironmentVariable("GENIE_CONPTY_DEBUG") == "1") Console.Error.WriteLine("[conpty] child pid=" + pi.dwProcessId);
 
       Thread tin = new Thread(delegate() { PumpIn(inWrite); });
