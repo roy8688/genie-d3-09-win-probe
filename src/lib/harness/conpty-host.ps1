@@ -17,14 +17,17 @@ using System.Threading;
 public class GenieConPty {
   [StructLayout(LayoutKind.Sequential)] public struct COORD { public short X; public short Y; }
   [StructLayout(LayoutKind.Sequential)] public struct SECURITY_ATTRIBUTES { public int nLength; public IntPtr lpSecurityDescriptor; public int bInheritHandle; }
-  [StructLayout(LayoutKind.Sequential, CharSet=CharSet.Unicode)] public struct STARTUPINFO {
-    public int cb; public string lpReserved; public string lpDesktop; public string lpTitle;
+  // 全 IntPtr：blittable，避免 string 字段让 P/Invoke 重新编组 STARTUPINFOEX，
+  // 导致 lpAttributeList 偏移与原生结构不一致（子进程拿不到伪控制台）。
+  [StructLayout(LayoutKind.Sequential)] public struct STARTUPINFO {
+    public int cb;
+    public IntPtr lpReserved; public IntPtr lpDesktop; public IntPtr lpTitle;
     public int dwX; public int dwY; public int dwXSize; public int dwYSize;
     public int dwXCountChars; public int dwYCountChars; public int dwFillAttribute; public int dwFlags;
-    public short wShowWindow; public short cbReserved2; public IntPtr lpReserved2;
-    public IntPtr hStdInput; public IntPtr hStdOutput; public IntPtr hStdError;
+    public short wShowWindow; public short cbReserved2;
+    public IntPtr lpReserved2; public IntPtr hStdInput; public IntPtr hStdOutput; public IntPtr hStdError;
   }
-  [StructLayout(LayoutKind.Sequential, CharSet=CharSet.Unicode)] public struct STARTUPINFOEX { public STARTUPINFO si; public IntPtr lpAttributeList; }
+  [StructLayout(LayoutKind.Sequential)] public struct STARTUPINFOEX { public STARTUPINFO si; public IntPtr lpAttributeList; }
   [StructLayout(LayoutKind.Sequential)] public struct PROCESS_INFORMATION { public IntPtr hProcess; public IntPtr hThread; public int dwProcessId; public int dwThreadId; }
 
   [DllImport("kernel32.dll", SetLastError=true)] static extern int CreatePseudoConsole(COORD size, IntPtr hInput, IntPtr hOutput, uint flags, out IntPtr phPC);
@@ -120,7 +123,7 @@ public class GenieConPty {
       SECURITY_ATTRIBUTES psa = new SECURITY_ATTRIBUTES(); psa.nLength = Marshal.SizeOf(typeof(SECURITY_ATTRIBUTES));
       SECURITY_ATTRIBUTES tsa = new SECURITY_ATTRIBUTES(); tsa.nLength = Marshal.SizeOf(typeof(SECURITY_ATTRIBUTES));
       ok = CreateProcess(null, commandLine, ref psa, ref tsa, false,
-        EXTENDED_STARTUPINFO_PRESENT | CREATE_UNICODE_ENVIRONMENT, IntPtr.Zero, cwd, ref siex, out pi);
+        EXTENDED_STARTUPINFO_PRESENT, IntPtr.Zero, cwd, ref siex, out pi);
       if (!ok) throw new Exception("CreateProcess failed: " + Marshal.GetLastWin32Error());
       // 子进程已创建：现在才能释放 CreatePseudoConsole 用的两个端点。
       CloseHandle(inRead); inRead = IntPtr.Zero;
