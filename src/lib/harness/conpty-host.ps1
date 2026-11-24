@@ -48,16 +48,22 @@ public class GenieConPty {
   static readonly IntPtr ATTR_PSEUDOCONSOLE = (IntPtr)0x00020016;
 
   static void PumpIn(IntPtr hWrite) {
+    bool dbg = Environment.GetEnvironmentVariable("GENIE_CONPTY_DEBUG") == "1";
     var stdin = Console.OpenStandardInput();
     byte[] buf = new byte[4096];
     try {
       while (true) {
         int n = stdin.Read(buf, 0, buf.Length);
+        if (dbg) Console.Error.WriteLine("[conpty] stdin read=" + n);
         if (n <= 0) break;
         uint wrote = 0;
-        if (!WriteFile(hWrite, buf, (uint)n, out wrote, IntPtr.Zero)) break;
+        if (!WriteFile(hWrite, buf, (uint)n, out wrote, IntPtr.Zero)) {
+          if (dbg) Console.Error.WriteLine("[conpty] WriteFile failed=" + Marshal.GetLastWin32Error());
+          break;
+        }
+        if (dbg) Console.Error.WriteLine("[conpty] wrote=" + wrote);
       }
-    } catch (Exception) {}
+    } catch (Exception e) { if (dbg) Console.Error.WriteLine("[conpty] in exception " + e.Message); }
     CloseHandle(hWrite);
   }
 
@@ -107,6 +113,7 @@ public class GenieConPty {
       ok = CreateProcess(null, commandLine, IntPtr.Zero, IntPtr.Zero, true,
         EXTENDED_STARTUPINFO_PRESENT | CREATE_UNICODE_ENVIRONMENT, IntPtr.Zero, cwd, ref siex, out pi);
       if (!ok) throw new Exception("CreateProcess failed: " + Marshal.GetLastWin32Error());
+      if (Environment.GetEnvironmentVariable("GENIE_CONPTY_DEBUG") == "1") Console.Error.WriteLine("[conpty] child pid=" + pi.dwProcessId);
 
       Thread tin = new Thread(delegate() { PumpIn(inWrite); });
       Thread tout = new Thread(delegate() { PumpOut(outRead); });
