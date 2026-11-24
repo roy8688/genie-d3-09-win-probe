@@ -15,6 +15,6 @@ let out = '';
 child.stdout.on('data', d => out += d);
 child.stderr.on('data', d => { out += d; });
 child.on('exit', (c, s) => { console.log('DEBUG_RESULT exe=' + exe + ' exit=' + c + ' signal=' + s + '\n' + out); process.exit(0); });
-setTimeout(() => { child.stdin.write('echo CONPTY_INPUT_OK\r\n'); }, 300);
-setTimeout(() => { child.stdin.write("Write-Output 'CONPTY_PS_OK'\r\n"); }, 1200);
+setTimeout(() => { child.stdin.write('echo CONPTY_INPUT_OK\r'); }, 300);
+setTimeout(() => { child.stdin.write("Write-Output 'CONPTY_PS_OK'\r"); }, 1200);
 setTimeout(() => { try { child.kill('SIGKILL'); } catch (_) {} }, 6000);
