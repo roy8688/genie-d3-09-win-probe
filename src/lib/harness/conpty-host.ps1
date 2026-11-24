@@ -131,7 +131,7 @@ public class GenieConPty {
       CloseHandle(inRead); inRead = IntPtr.Zero;
       CloseHandle(outWrite); outWrite = IntPtr.Zero;
       if (Environment.GetEnvironmentVariable("GENIE_CONPTY_DEBUG") == "1") Console.Error.WriteLine("[conpty] child pid=" + pi.dwProcessId +
-        " session=" + Process.GetCurrentProcess().SessionId + " interactive=" + Environment.UserInteractive + " consoleWnd=" + GetConsoleWindow().ToInt64());
+        " session=" + System.Diagnostics.Process.GetCurrentProcess().SessionId + " interactive=" + Environment.UserInteractive + " consoleWnd=" + GetConsoleWindow().ToInt64());
 
       Thread tin = new Thread(delegate() { PumpIn(inWrite); });
       Thread tout = new Thread(delegate() { PumpOut(outRead); });
