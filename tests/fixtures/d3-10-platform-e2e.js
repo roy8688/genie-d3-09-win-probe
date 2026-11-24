@@ -77,6 +77,9 @@ async function main() {
   out.discovered.wps = wps;
   if (process.platform !== 'darwin') assert.equal(wps.supported, false);
   out.checked.push('wps-degradation');
+  out.discovered.fonts = { cjk: Platform.fonts.cjk(), stack: Platform.fonts.stack() };
+  assert.ok(out.discovered.fonts.cjk, 'CJK 字体不能为空');
+  out.checked.push('fonts');
 
   // 无桌面环境不弹原生对话框、不做 GUI 截图；这是明确 skip，不是通过。
   out.skipped.push({ item: 'native-dialog', reason: 'CI 无交互桌面，弹窗会挂起' });
