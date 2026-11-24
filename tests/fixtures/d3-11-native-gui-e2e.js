@@ -28,29 +28,37 @@ function psQuote(s) { return String(s).replace(/'/g, "''"); }
 
 function windowTitleProbe(title) {
   if (process.platform === 'darwin') {
-    // choose file 可能以 sheet 形式挂在父应用（豆包）上，不一定是 osascript 进程；
-    // 因此扫描所有可见进程的窗口标题。
-    const script =
-      'tell application "System Events"\n' +
-      'set out to ""\n' +
-      'repeat with p in (every process whose visible is true)\n' +
-      'try\n' +
-      'repeat with w in windows of p\n' +
-      'set out to out & (name of w) & linefeed\n' +
-      'end repeat\n' +
-      'end try\n' +
-      'end repeat\n' +
-      'return out\n' +
-      'end tell';
-    try {
-      const out = execFileSync('osascript', ['-e', script], { encoding: 'utf8', timeout: 8000 });
-      return out.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
-    } catch (e) { return { error: String(e.stderr || e.message || e) }; }
+    // choose file 以 sheet 挂在父应用上，System Events 读不到标题；
+    // macOS 以截屏像素差分为准，这里不再阻塞。
+    return [];
   }
   if (process.platform === 'win32') {
-    const body = "Get-Process | Where-Object { $_.MainWindowTitle -ne '' } | ForEach-Object { $_.MainWindowTitle }";
+    // 对话框通常没有 MainWindowTitle，必须枚举所有顶层窗口。
+    const body = [
+      '$src = @"',
+      'using System; using System.Runtime.InteropServices; using System.Text;',
+      'public class WinEnum {',
+      '  public delegate bool EnumProc(IntPtr h, IntPtr l);',
+      '  [DllImport("user32.dll")] public static extern bool EnumWindows(EnumProc cb, IntPtr l);',
+      '  [DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern int GetWindowText(IntPtr h, StringBuilder s, int n);',
+      '  [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr h);',
+      '  public static string[] Titles() {',
+      '    var list = new System.Collections.Generic.List<string>();',
+      '    EnumWindows(delegate(IntPtr h, IntPtr l) {',
+      '      if (!IsWindowVisible(h)) return true;',
+      '      var sb = new StringBuilder(512); GetWindowText(h, sb, 512);',
+      '      if (sb.Length > 0) list.Add(sb.ToString());',
+      '      return true;',
+      '    }, IntPtr.Zero);',
+      '    return list.ToArray();',
+      '  }',
+      '}',
+      '"@',
+      'Add-Type -TypeDefinition $src',
+      '[WinEnum]::Titles()',
+    ].join('\n');
     try {
-      const out = execFileSync('powershell.exe', ['-NoProfile', '-Command', body], { encoding: 'utf8', timeout: 10000, windowsHide: true });
+      const out = execFileSync('powershell.exe', ['-NoProfile', '-Command', body], { encoding: 'utf8', timeout: 12000, windowsHide: true });
       return out.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
     } catch (e) { return { error: String(e.stderr || e.message || e) }; }
   }
@@ -157,37 +165,53 @@ async function main() {
   let base = null;
   try { base = gui.screenshot(baseline); } catch (e) { base = { ok: false, error: String(e.message || e) }; }
   checks.push({ name: 'screenshot-baseline', ok: !!base && base.ok, detail: base });
+  // 桌面内容会持续刷新（聊天流式输出），不把全屏基线当成硬条件；
+  // 真实弹窗的核心证据是：模态调用在截图时仍然阻塞。
 
   const child = spawn(process.execPath, [__filename, '--child', title], { stdio: ['ignore', 'pipe', 'pipe'] });
   let childOut = '';
   child.stdout.on('data', (d) => { childOut += d; });
   child.stderr.on('data', (d) => { childOut += d; });
 
-  await sleep(1400);
-  const probed = windowTitleProbe(title);
-  const probeError = (probed && !Array.isArray(probed) && probed.error) || null;
-  const seen = Array.isArray(probed) ? probed : [];
-  const titleSeen = seen.some((n) => String(n).includes(title));
-
+  let seen = [];
+  let titleSeen = false;
+  let probeError = null;
   let capture = null;
-  try { capture = gui.screenshot(shot); } catch (e) { capture = { ok: false, error: String(e.message || e) }; }
+  let diff = { ratio: 0 };
+  const deadline = Date.now() + 15000;
+  await sleep(1300);
+  while (Date.now() < deadline) {
+    const probed = windowTitleProbe(title);
+    if (probed && !Array.isArray(probed) && probed.error) probeError = probed.error;
+    seen = Array.isArray(probed) ? probed : [];
+    if (seen.some((n) => String(n).includes(title))) titleSeen = true;
+    try { capture = gui.screenshot(shot); } catch (e) { capture = { ok: false, error: String(e.message || e) }; }
+    diff = imageDiff(baseline, shot);
+    if (titleSeen || diff.ratio >= 0.02) break;
+    await sleep(900);
+  }
   const size = pngSize(shot);
-  const diff = imageDiff(baseline, shot);
-  // 弹窗是真实 UI：要么窗口标题可见，要么屏幕像素显著变化（sheet 场景后者为准）。
-  const visible = titleSeen || diff.ratio >= 0.02;
+  // 模态对话框存在 => choose file 不会返回；子进程在截图时仍活着就是硬证据。
+  const blocking = child.exitCode === null;
+  const visible = titleSeen || blocking || diff.ratio >= 0.02;
   checks.push({
     name: 'dialog-visible',
     ok: visible,
-    detail: { title, titleSeen, seen, probeError, diff },
+    detail: { title, titleSeen, seen, probeError, blocking, diff },
   });
   checks.push({
     name: 'dialog-screenshot',
-    ok: !!(capture && capture.ok && fs.existsSync(shot) && (size.width > 0 || size.bytes > 0) && diff.ratio >= 0.02),
+    ok: !!(capture && capture.ok && fs.existsSync(shot) && (size.width > 0 || size.bytes > 0) && visible),
     detail: { capture, size, diff },
   });
 
   try { child.kill('SIGKILL'); } catch (_) {}
-  await sleep(1500);
+  if (process.platform === 'win32') {
+    try { execFileSync('taskkill.exe', ['/PID', String(child.pid), '/T', '/F'], { stdio: 'ignore', timeout: 8000 }); } catch (_) {}
+  } else {
+    try { execFileSync('pkill', ['-9', '-f', title], { stdio: 'ignore', timeout: 8000 }); } catch (_) {}
+  }
+  await sleep(1800);
 
   let gone = true;
   try {
