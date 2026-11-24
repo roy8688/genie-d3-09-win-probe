@@ -38,8 +38,8 @@ public class GenieConPty {
   [DllImport("kernel32.dll", SetLastError=true)] static extern bool InitializeProcThreadAttributeList(IntPtr list, int count, int flags, ref IntPtr size);
   [DllImport("kernel32.dll", SetLastError=true)] static extern bool UpdateProcThreadAttribute(IntPtr list, uint flags, IntPtr attribute, IntPtr value, IntPtr size, IntPtr prev, IntPtr ret);
   [DllImport("kernel32.dll")] static extern void DeleteProcThreadAttributeList(IntPtr list);
-  [DllImport("kernel32.dll", SetLastError=true, CharSet=CharSet.Unicode)]
-  static extern bool CreateProcess(string app, string cmd, ref SECURITY_ATTRIBUTES pa, ref SECURITY_ATTRIBUTES ta, bool inherit, uint flags, IntPtr env, string cwd, [In] ref STARTUPINFOEX si, out PROCESS_INFORMATION pi);
+  [DllImport("kernel32.dll", SetLastError=true, CharSet=CharSet.Unicode, ExactSpelling=true)]
+  static extern bool CreateProcessW(string app, string cmd, IntPtr pa, IntPtr ta, bool inherit, uint flags, IntPtr env, string cwd, IntPtr si, out PROCESS_INFORMATION pi);
   [DllImport("kernel32.dll", SetLastError=true)] static extern uint WaitForSingleObject(IntPtr h, uint ms);
   [DllImport("kernel32.dll", SetLastError=true)] static extern bool GetExitCodeProcess(IntPtr h, out int code);
   [DllImport("kernel32.dll", SetLastError=true)] static extern bool ReadFile(IntPtr h, byte[] buf, uint n, out uint got, IntPtr ov);
@@ -116,10 +116,15 @@ public class GenieConPty {
           " attrOffset=" + Marshal.OffsetOf(typeof(STARTUPINFOEX), "lpAttributeList").ToInt64() +
           " hPC=" + hPC.ToInt64() + " attrList=" + attrList.ToInt64());
       }
-      SECURITY_ATTRIBUTES psa = new SECURITY_ATTRIBUTES(); psa.nLength = Marshal.SizeOf(typeof(SECURITY_ATTRIBUTES));
-      SECURITY_ATTRIBUTES tsa = new SECURITY_ATTRIBUTES(); tsa.nLength = Marshal.SizeOf(typeof(SECURITY_ATTRIBUTES));
-      ok = CreateProcess(null, commandLine, ref psa, ref tsa, false,
-        EXTENDED_STARTUPINFO_PRESENT, IntPtr.Zero, cwd, ref siex, out pi);
+      // 显式把 STARTUPINFOEX 写进原生内存再传指针，彻底绕开 P/Invoke 的结构编组。
+      IntPtr siPtr = Marshal.AllocHGlobal(Marshal.SizeOf(typeof(STARTUPINFOEX)));
+      Marshal.StructureToPtr(siex, siPtr, false);
+      try {
+        ok = CreateProcessW(null, commandLine, IntPtr.Zero, IntPtr.Zero, false,
+          EXTENDED_STARTUPINFO_PRESENT, IntPtr.Zero, cwd, siPtr, out pi);
+      } finally {
+        Marshal.FreeHGlobal(siPtr);
+      }
       if (!ok) throw new Exception("CreateProcess failed: " + Marshal.GetLastWin32Error());
       // 子进程已创建：现在才能释放 CreatePseudoConsole 用的两个端点。
       CloseHandle(inRead); inRead = IntPtr.Zero;
