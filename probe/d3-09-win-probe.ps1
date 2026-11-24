@@ -135,7 +135,7 @@ public static class GenieWinProbe {
     STARTUPINFO si = new STARTUPINFO(); si.cb = Marshal.SizeOf(si);
     PROCESS_INFORMATION pi = new PROCESS_INFORMATION();
     bool created = CreateProcessAsUser(restricted, null, cmd, IntPtr.Zero, IntPtr.Zero, false,
-      0x00000004 | 0x00000400, IntPtr.Zero, cwd, ref si, out pi);
+      0x00000400, IntPtr.Zero, cwd, ref si, out pi);
     int createErr = Marshal.GetLastWin32Error();
     CloseHandle(restricted);
     if (!created) return "CREATE_PROCESS:" + createErr;
@@ -149,7 +149,7 @@ public static class GenieWinProbe {
     STARTUPINFO si = new STARTUPINFO(); si.cb = Marshal.SizeOf(si);
     PROCESS_INFORMATION pi = new PROCESS_INFORMATION();
     bool created = CreateProcess(null, cmd, IntPtr.Zero, IntPtr.Zero, false,
-      0x00000004 | 0x00000400, IntPtr.Zero, cwd, ref si, out pi);
+      0x00000400, IntPtr.Zero, cwd, ref si, out pi);
     if (!created) return "CREATE_PROCESS:" + Marshal.GetLastWin32Error();
     IntPtr job = CreateJobObject(IntPtr.Zero, null);
     if (job == IntPtr.Zero) return "CREATE_JOB:" + Marshal.GetLastWin32Error();
