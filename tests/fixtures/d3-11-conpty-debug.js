@@ -9,7 +9,7 @@ const exe = process.argv[2] || 'cmd.exe';
 const inner = exe.toLowerCase().includes('cmd') ? ['/Q', '/K'] : ['-NoLogo', '-NoProfile', '-NoExit'];
 const argsB64 = Buffer.from(inner.join('\n'), 'utf8').toString('base64');
 const child = spawn(ps, ['-NoLogo','-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',host,'-Exe',exe,'-Cwd',os.tmpdir(),'-ArgsB64',argsB64,'-Cols','120','-Rows','30'], {
-  env: Object.assign({}, process.env, { GENIE_CONPTY_DEBUG: '1' }), stdio: ['pipe','pipe','pipe'], windowsHide: true,
+  env: Object.assign({}, process.env, { GENIE_CONPTY_DEBUG: '1' }), stdio: ['pipe','pipe','pipe'], windowsHide: false,
 });
 let out = '';
 child.stdout.on('data', d => out += d);
