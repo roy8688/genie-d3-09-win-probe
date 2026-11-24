@@ -257,7 +257,7 @@ function conptyRuntime() {
     if (!r.error && r.status === 0) {
       _conptyProbe = { ok: true, reason: 'ConPTY（CreatePseudoConsole）', host, shell: shellExe };
     } else {
-      _conptyProbe = { ok: false, reason: 'ConPTY 探测失败：' + ((r.error && r.error.message) || ('exit=' + r.status + ' ' + String(r.stderr || '').slice(-300))), host, shell: shellExe };
+      _conptyProbe = { ok: false, reason: 'ConPTY 探测失败：' + ((r.error && r.error.message) || ('exit=' + r.status + ' ' + String(r.stderr || '').slice(-2000))), host, shell: shellExe };
     }
   } catch (e) {
     _conptyProbe = { ok: false, reason: 'ConPTY 探测异常：' + e.message, host, shell: shellExe };
