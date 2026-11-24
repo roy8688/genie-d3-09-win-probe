@@ -21,5 +21,11 @@ jobs:
           node tests/fixtures/d3-11-conpty-debug.js cmd.exe
           node tests/fixtures/d3-11-conpty-debug.js pwsh.exe
           node tests/fixtures/d3-11-conpty-console-probe.js pwsh.exe
+      - name: node-pty control (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          npm init -y
+          npm i node-pty@1.1.0 --no-audit --no-fund
+          node tests/fixtures/d3-11-nodepty-probe.js
       - name: PTY e2e
         run: node tests/fixtures/d3-11-pty-e2e.js
