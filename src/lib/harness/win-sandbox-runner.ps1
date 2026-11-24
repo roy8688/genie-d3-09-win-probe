@@ -160,7 +160,7 @@ public static class GenieSandboxRunner {
   const uint TOKEN_QUERY = 0x0008;
   const uint TOKEN_ADJUST_DEFAULT = 0x0080;
   const uint TOKEN_ADJUST_SESSIONID = 0x0100;
-  const uint WRITE_RESTRICTED = 0x00000020;
+  const uint WRITE_RESTRICTED = 0x00000008;
   const uint CREATE_SUSPENDED = 0x00000004;
   const uint CREATE_UNICODE_ENVIRONMENT = 0x00000400;
   const uint CREATE_NO_WINDOW = 0x08000000;
