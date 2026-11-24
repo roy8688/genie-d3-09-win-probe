@@ -190,6 +190,17 @@ async function main() {
     if (titleSeen || diff.ratio >= 0.02) break;
     await sleep(900);
   }
+  // Linux: 根窗口在 Xvfb 上常常只呈现很小一块，直接截弹窗窗口本身。
+  if (process.platform === 'linux' && titleSeen) {
+    try {
+      const ids = String(execFileSync('xdotool', ['search', '--onlyvisible', '--name', title], { encoding: 'utf8', timeout: 8000 }))
+        .split(/\r?\n/).map((x) => x.trim()).filter(Boolean);
+      if (ids.length) {
+        execFileSync('import', ['-window', ids[0], shot], { timeout: 15000 });
+        capture = { ok: true, tool: 'import-window', window: ids[0] };
+      }
+    } catch (e) { capture = { ok: false, tool: 'import-window', error: String(e.message || e) }; }
+  }
   const size = pngSize(shot);
   // 模态对话框存在 => choose file 不会返回；子进程在截图时仍活着就是硬证据。
   const blocking = child.exitCode === null;
