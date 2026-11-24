@@ -40,6 +40,7 @@ public class GenieConPty {
   [DllImport("kernel32.dll")] static extern void DeleteProcThreadAttributeList(IntPtr list);
   [DllImport("kernel32.dll", SetLastError=true, CharSet=CharSet.Unicode, ExactSpelling=true)]
   static extern bool CreateProcessW(string app, string cmd, IntPtr pa, IntPtr ta, bool inherit, uint flags, IntPtr env, string cwd, IntPtr si, out PROCESS_INFORMATION pi);
+  [DllImport("kernel32.dll")] static extern IntPtr GetConsoleWindow();
   [DllImport("kernel32.dll", SetLastError=true)] static extern uint WaitForSingleObject(IntPtr h, uint ms);
   [DllImport("kernel32.dll", SetLastError=true)] static extern bool GetExitCodeProcess(IntPtr h, out int code);
   [DllImport("kernel32.dll", SetLastError=true)] static extern bool ReadFile(IntPtr h, byte[] buf, uint n, out uint got, IntPtr ov);
@@ -129,7 +130,8 @@ public class GenieConPty {
       // 子进程已创建：现在才能释放 CreatePseudoConsole 用的两个端点。
       CloseHandle(inRead); inRead = IntPtr.Zero;
       CloseHandle(outWrite); outWrite = IntPtr.Zero;
-      if (Environment.GetEnvironmentVariable("GENIE_CONPTY_DEBUG") == "1") Console.Error.WriteLine("[conpty] child pid=" + pi.dwProcessId);
+      if (Environment.GetEnvironmentVariable("GENIE_CONPTY_DEBUG") == "1") Console.Error.WriteLine("[conpty] child pid=" + pi.dwProcessId +
+        " session=" + Process.GetCurrentProcess().SessionId + " interactive=" + Environment.UserInteractive + " consoleWnd=" + GetConsoleWindow().ToInt64());
 
       Thread tin = new Thread(delegate() { PumpIn(inWrite); });
       Thread tout = new Thread(delegate() { PumpOut(outRead); });
