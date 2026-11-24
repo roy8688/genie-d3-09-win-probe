@@ -1,0 +1,152 @@
+# D3-11 ConPTY 宿主（2026-11-24）
+# 零原生依赖：Windows PowerShell 5.1 的 Add-Type 调用 kernel32 CreatePseudoConsole。
+# 只负责把 stdin/stdout 接到伪控制台，不解释命令；退出码透传子进程退出码。
+param(
+  [Parameter(Mandatory=$true)][string]$Exe,
+  [Parameter(Mandatory=$true)][string]$Cwd,
+  [Parameter(Mandatory=$true)][string]$ArgsB64,
+  [int]$Cols = 120,
+  [int]$Rows = 30
+)
+$ErrorActionPreference = 'Stop'
+$src = @'
+using System;
+using System.Runtime.InteropServices;
+using System.Threading;
+
+public class GenieConPty {
+  [StructLayout(LayoutKind.Sequential)] public struct COORD { public short X; public short Y; }
+  [StructLayout(LayoutKind.Sequential)] public struct SECURITY_ATTRIBUTES { public int nLength; public IntPtr lpSecurityDescriptor; public int bInheritHandle; }
+  [StructLayout(LayoutKind.Sequential, CharSet=CharSet.Unicode)] public struct STARTUPINFO {
+    public int cb; public string lpReserved; public string lpDesktop; public string lpTitle;
+    public int dwX; public int dwY; public int dwXSize; public int dwYSize;
+    public int dwXCountChars; public int dwYCountChars; public int dwFillAttribute; public int dwFlags;
+    public short wShowWindow; public short cbReserved2; public IntPtr lpReserved2;
+    public IntPtr hStdInput; public IntPtr hStdOutput; public IntPtr hStdError;
+  }
+  [StructLayout(LayoutKind.Sequential)] public struct STARTUPINFOEX { public STARTUPINFO si; public IntPtr lpAttributeList; }
+  [StructLayout(LayoutKind.Sequential)] public struct PROCESS_INFORMATION { public IntPtr hProcess; public IntPtr hThread; public int dwProcessId; public int dwThreadId; }
+
+  [DllImport("kernel32.dll", SetLastError=true)] static extern int CreatePseudoConsole(COORD size, IntPtr hInput, IntPtr hOutput, uint flags, out IntPtr phPC);
+  [DllImport("kernel32.dll")] static extern void ClosePseudoConsole(IntPtr hPC);
+  [DllImport("kernel32.dll", SetLastError=true)] static extern bool CreatePipe(out IntPtr hRead, out IntPtr hWrite, ref SECURITY_ATTRIBUTES sa, int size);
+  [DllImport("kernel32.dll", SetLastError=true)] static extern bool SetHandleInformation(IntPtr hObject, int mask, int flags);
+  [DllImport("kernel32.dll", SetLastError=true)] static extern bool CloseHandle(IntPtr hObject);
+  [DllImport("kernel32.dll", SetLastError=true)] static extern bool InitializeProcThreadAttributeList(IntPtr list, int count, int flags, ref IntPtr size);
+  [DllImport("kernel32.dll", SetLastError=true)] static extern bool UpdateProcThreadAttribute(IntPtr list, uint flags, IntPtr attribute, IntPtr value, IntPtr size, IntPtr prev, IntPtr ret);
+  [DllImport("kernel32.dll")] static extern void DeleteProcThreadAttributeList(IntPtr list);
+  [DllImport("kernel32.dll", SetLastError=true, CharSet=CharSet.Unicode)]
+  static extern bool CreateProcess(string app, string cmd, IntPtr pa, IntPtr ta, bool inherit, uint flags, IntPtr env, string cwd, ref STARTUPINFOEX si, out PROCESS_INFORMATION pi);
+  [DllImport("kernel32.dll", SetLastError=true)] static extern uint WaitForSingleObject(IntPtr h, uint ms);
+  [DllImport("kernel32.dll", SetLastError=true)] static extern bool GetExitCodeProcess(IntPtr h, out int code);
+  [DllImport("kernel32.dll", SetLastError=true)] static extern bool ReadFile(IntPtr h, byte[] buf, uint n, out uint got, IntPtr ov);
+  [DllImport("kernel32.dll", SetLastError=true)] static extern bool WriteFile(IntPtr h, byte[] buf, uint n, out uint wrote, IntPtr ov);
+
+  const int HANDLE_FLAG_INHERIT = 1;
+  const uint EXTENDED_STARTUPINFO_PRESENT = 0x00080000;
+  const uint CREATE_UNICODE_ENVIRONMENT = 0x00000400;
+  const IntPtr ATTR_PSEUDOCONSOLE = (IntPtr)0x00020016;
+
+  static void PumpIn(IntPtr hWrite) {
+    var stdin = Console.OpenStandardInput();
+    byte[] buf = new byte[4096];
+    try {
+      while (true) {
+        int n = stdin.Read(buf, 0, buf.Length);
+        if (n <= 0) break;
+        uint wrote = 0;
+        if (!WriteFile(hWrite, buf, (uint)n, out wrote, IntPtr.Zero)) break;
+      }
+    } catch (Exception) {}
+    CloseHandle(hWrite);
+  }
+
+  static void PumpOut(IntPtr hRead) {
+    var stdout = Console.OpenStandardOutput();
+    byte[] buf = new byte[65536];
+    try {
+      while (true) {
+        uint got = 0;
+        if (!ReadFile(hRead, buf, (uint)buf.Length, out got, IntPtr.Zero) || got == 0) break;
+        stdout.Write(buf, 0, (int)got);
+        stdout.Flush();
+      }
+    } catch (Exception) {}
+    CloseHandle(hRead);
+  }
+
+  public static int Run(string commandLine, string cwd, int cols, int rows) {
+    IntPtr inRead = IntPtr.Zero, inWrite = IntPtr.Zero, outRead = IntPtr.Zero, outWrite = IntPtr.Zero;
+    IntPtr hPC = IntPtr.Zero, attrList = IntPtr.Zero, attrSize = IntPtr.Zero;
+    PROCESS_INFORMATION pi = new PROCESS_INFORMATION();
+    STARTUPINFOEX siex = new STARTUPINFOEX();
+    bool ok = false;
+    try {
+      SECURITY_ATTRIBUTES sa = new SECURITY_ATTRIBUTES();
+      sa.nLength = Marshal.SizeOf(typeof(SECURITY_ATTRIBUTES));
+      sa.bInheritHandle = 1;
+      if (!CreatePipe(out inRead, out inWrite, ref sa, 0)) throw new Exception("CreatePipe(in) failed: " + Marshal.GetLastWin32Error());
+      if (!CreatePipe(out outRead, out outWrite, ref sa, 0)) throw new Exception("CreatePipe(out) failed: " + Marshal.GetLastWin32Error());
+      SetHandleInformation(inWrite, HANDLE_FLAG_INHERIT, 0);
+      SetHandleInformation(outRead, HANDLE_FLAG_INHERIT, 0);
+
+      COORD size = new COORD(); size.X = (short)cols; size.Y = (short)rows;
+      int hr = CreatePseudoConsole(size, inRead, outWrite, 0, out hPC);
+      if (hr != 0) throw new Exception("CreatePseudoConsole failed: 0x" + hr.ToString("X8"));
+      CloseHandle(inRead); inRead = IntPtr.Zero;
+      CloseHandle(outWrite); outWrite = IntPtr.Zero;
+
+      InitializeProcThreadAttributeList(IntPtr.Zero, 1, 0, ref attrSize);
+      attrList = Marshal.AllocHGlobal(attrSize);
+      if (!InitializeProcThreadAttributeList(attrList, 1, 0, ref attrSize)) throw new Exception("InitializeProcThreadAttributeList failed: " + Marshal.GetLastWin32Error());
+      if (!UpdateProcThreadAttribute(attrList, 0, ATTR_PSEUDOCONSOLE, hPC, (IntPtr)IntPtr.Size, IntPtr.Zero, IntPtr.Zero))
+        throw new Exception("UpdateProcThreadAttribute failed: " + Marshal.GetLastWin32Error());
+
+      siex.si.cb = Marshal.SizeOf(typeof(STARTUPINFOEX));
+      siex.lpAttributeList = attrList;
+      ok = CreateProcess(null, commandLine, IntPtr.Zero, IntPtr.Zero, true,
+        EXTENDED_STARTUPINFO_PRESENT | CREATE_UNICODE_ENVIRONMENT, IntPtr.Zero, cwd, ref siex, out pi);
+      if (!ok) throw new Exception("CreateProcess failed: " + Marshal.GetLastWin32Error());
+
+      Thread tin = new Thread(delegate() { PumpIn(inWrite); });
+      Thread tout = new Thread(delegate() { PumpOut(outRead); });
+      tin.IsBackground = true; tout.IsBackground = true;
+      tin.Start(); tout.Start();
+
+      WaitForSingleObject(pi.hProcess, 0xFFFFFFFF);
+      int code = 0; GetExitCodeProcess(pi.hProcess, out code);
+      Thread.Sleep(150);
+      ClosePseudoConsole(hPC); hPC = IntPtr.Zero;
+      tout.Join(1000);
+      return code;
+    } finally {
+      if (ok) { CloseHandle(pi.hThread); CloseHandle(pi.hProcess); }
+      if (attrList != IntPtr.Zero) { DeleteProcThreadAttributeList(attrList); Marshal.FreeHGlobal(attrList); }
+      if (hPC != IntPtr.Zero) ClosePseudoConsole(hPC);
+      if (inRead != IntPtr.Zero) CloseHandle(inRead);
+      if (inWrite != IntPtr.Zero) CloseHandle(inWrite);
+      if (outRead != IntPtr.Zero) CloseHandle(outRead);
+      if (outWrite != IntPtr.Zero) CloseHandle(outWrite);
+    }
+  }
+}
+'@
+Add-Type -TypeDefinition $src -Language CSharp
+$argsText = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($ArgsB64))
+$shellArgs = @($argsText -split "`n" | Where-Object { $_ -ne '' })
+function QuoteArg([string]$s) {
+  if ($s -notmatch '[ \t"]') { return $s }
+  $out = '"'
+  $bs = 0
+  foreach ($ch in $s.ToCharArray()) {
+    if ($ch -eq '\') { $bs++; continue }
+    if ($ch -eq '"') { $out += ('\' * ($bs * 2 + 1)) + '"'; $bs = 0; continue }
+    if ($bs -gt 0) { $out += ('\' * $bs); $bs = 0 }
+    $out += $ch
+  }
+  if ($bs -gt 0) { $out += ('\' * ($bs * 2)) }
+  return $out + '"'
+}
+$cmd = (QuoteArg $Exe) + ' ' + (($shellArgs | ForEach-Object { QuoteArg $_ }) -join ' ')
+$code = [GenieConPty]::Run($cmd, $Cwd, $Cols, $Rows)
+exit $code
