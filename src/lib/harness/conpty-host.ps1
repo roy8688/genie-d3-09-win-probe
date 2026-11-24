@@ -45,7 +45,7 @@ public class GenieConPty {
   const int HANDLE_FLAG_INHERIT = 1;
   const uint EXTENDED_STARTUPINFO_PRESENT = 0x00080000;
   const uint CREATE_UNICODE_ENVIRONMENT = 0x00000400;
-  const IntPtr ATTR_PSEUDOCONSOLE = (IntPtr)0x00020016;
+  static readonly IntPtr ATTR_PSEUDOCONSOLE = (IntPtr)0x00020016;
 
   static void PumpIn(IntPtr hWrite) {
     var stdin = Console.OpenStandardInput();
