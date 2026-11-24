@@ -15,5 +15,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - name: ConPTY input debug (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          node tests/fixtures/d3-11-conpty-debug.js cmd.exe
+          node tests/fixtures/d3-11-conpty-debug.js pwsh.exe
       - name: PTY e2e
         run: node tests/fixtures/d3-11-pty-e2e.js
