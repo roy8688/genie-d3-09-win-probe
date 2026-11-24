@@ -74,6 +74,7 @@ public class GenieConPty {
       while (true) {
         uint got = 0;
         if (!ReadFile(hRead, buf, (uint)buf.Length, out got, IntPtr.Zero) || got == 0) break;
+        if (Environment.GetEnvironmentVariable("GENIE_CONPTY_DEBUG") == "1") Console.Error.WriteLine("[conpty] out n=" + got);
         stdout.Write(buf, 0, (int)got);
         stdout.Flush();
       }
