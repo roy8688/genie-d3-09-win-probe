@@ -15,17 +15,14 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: ConPTY input debug (Windows)
-        if: runner.os == 'Windows'
-        run: |
-          node tests/fixtures/d3-11-conpty-debug.js cmd.exe
-          node tests/fixtures/d3-11-conpty-debug.js pwsh.exe
-          node tests/fixtures/d3-11-conpty-console-probe.js pwsh.exe
-      - name: node-pty control (Windows)
-        if: runner.os == 'Windows'
-        run: |
-          npm init -y
-          npm i node-pty@1.1.0 --no-audit --no-fund
-          node tests/fixtures/d3-11-nodepty-probe.js
       - name: PTY e2e
         run: node tests/fixtures/d3-11-pty-e2e.js
+      - name: Native dialog / GUI e2e (Linux Xvfb)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq xvfb zenity xdotool imagemagick
+          xvfb-run -a -s '-screen 0 1280x1024x24' node tests/fixtures/d3-11-native-gui-e2e.js
+      - name: Native dialog / GUI e2e (Windows)
+        if: runner.os == 'Windows'
+        run: node tests/fixtures/d3-11-native-gui-e2e.js
