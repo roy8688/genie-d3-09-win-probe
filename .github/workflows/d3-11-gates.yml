@@ -21,7 +21,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq xvfb zenity xdotool imagemagick
+          sudo apt-get install -y -qq xvfb zenity xdotool imagemagick scrot
           xvfb-run -a -s '-screen 0 1280x1024x24' node tests/fixtures/d3-11-native-gui-e2e.js
       - name: Native dialog / GUI e2e (Windows)
         if: runner.os == 'Windows'
