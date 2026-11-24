@@ -95,13 +95,6 @@ public class GenieConPty {
     PROCESS_INFORMATION pi = new PROCESS_INFORMATION();
     STARTUPINFOEX siex = new STARTUPINFOEX();
     bool ok = false;
-    IntPtr savedIn = GetStdHandle(-10), savedOut = GetStdHandle(-11), savedErr = GetStdHandle(-12);
-    if (GetConsoleWindow() == IntPtr.Zero) {
-      AllocConsole();
-      SetStdHandle(-10, savedIn); SetStdHandle(-11, savedOut); SetStdHandle(-12, savedErr);
-      if (Environment.GetEnvironmentVariable("GENIE_CONPTY_DEBUG") == "1")
-        Console.Error.WriteLine("[conpty] AllocConsole -> consoleWnd=" + GetConsoleWindow().ToInt64());
-    }
     try {
       // 与官方样例一致：SECURITY_ATTRIBUTES 为空，句柄默认不可继承。
       if (!CreatePipe(out inRead, out inWrite, IntPtr.Zero, 0)) throw new Exception("CreatePipe(in) failed: " + Marshal.GetLastWin32Error());
@@ -120,6 +113,12 @@ public class GenieConPty {
         throw new Exception("UpdateProcThreadAttribute failed: " + Marshal.GetLastWin32Error());
 
       siex.si.cb = Marshal.SizeOf(typeof(STARTUPINFOEX));
+      // 关键：显式声明使用 std 句柄并置空，强制子进程采用伪控制台句柄，
+      // 否则它会继承宿主的重定向 stdio，ConPTY 属性被绕过（node-pty 同款）。
+      siex.si.dwFlags = 0x00000100; // STARTF_USESTDHANDLES
+      siex.si.hStdInput = IntPtr.Zero;
+      siex.si.hStdOutput = IntPtr.Zero;
+      siex.si.hStdError = IntPtr.Zero;
       siex.lpAttributeList = attrList;
       if (Environment.GetEnvironmentVariable("GENIE_CONPTY_DEBUG") == "1") {
         Console.Error.WriteLine("[conpty] sizeof STARTUPINFO=" + Marshal.SizeOf(typeof(STARTUPINFO)) +
