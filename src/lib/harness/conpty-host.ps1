@@ -24,7 +24,7 @@ public class GenieConPty {
     public short wShowWindow; public short cbReserved2; public IntPtr lpReserved2;
     public IntPtr hStdInput; public IntPtr hStdOutput; public IntPtr hStdError;
   }
-  [StructLayout(LayoutKind.Sequential)] public struct STARTUPINFOEX { public STARTUPINFO si; public IntPtr lpAttributeList; }
+  [StructLayout(LayoutKind.Sequential, CharSet=CharSet.Unicode)] public struct STARTUPINFOEX { public STARTUPINFO si; public IntPtr lpAttributeList; }
   [StructLayout(LayoutKind.Sequential)] public struct PROCESS_INFORMATION { public IntPtr hProcess; public IntPtr hThread; public int dwProcessId; public int dwThreadId; }
 
   [DllImport("kernel32.dll", SetLastError=true)] static extern int CreatePseudoConsole(COORD size, IntPtr hInput, IntPtr hOutput, uint flags, out IntPtr phPC);
@@ -36,7 +36,7 @@ public class GenieConPty {
   [DllImport("kernel32.dll", SetLastError=true)] static extern bool UpdateProcThreadAttribute(IntPtr list, uint flags, IntPtr attribute, IntPtr value, IntPtr size, IntPtr prev, IntPtr ret);
   [DllImport("kernel32.dll")] static extern void DeleteProcThreadAttributeList(IntPtr list);
   [DllImport("kernel32.dll", SetLastError=true, CharSet=CharSet.Unicode)]
-  static extern bool CreateProcess(string app, string cmd, IntPtr pa, IntPtr ta, bool inherit, uint flags, IntPtr env, string cwd, ref STARTUPINFOEX si, out PROCESS_INFORMATION pi);
+  static extern bool CreateProcess(string app, string cmd, ref SECURITY_ATTRIBUTES pa, ref SECURITY_ATTRIBUTES ta, bool inherit, uint flags, IntPtr env, string cwd, [In] ref STARTUPINFOEX si, out PROCESS_INFORMATION pi);
   [DllImport("kernel32.dll", SetLastError=true)] static extern uint WaitForSingleObject(IntPtr h, uint ms);
   [DllImport("kernel32.dll", SetLastError=true)] static extern bool GetExitCodeProcess(IntPtr h, out int code);
   [DllImport("kernel32.dll", SetLastError=true)] static extern bool ReadFile(IntPtr h, byte[] buf, uint n, out uint got, IntPtr ov);
@@ -111,7 +111,15 @@ public class GenieConPty {
 
       siex.si.cb = Marshal.SizeOf(typeof(STARTUPINFOEX));
       siex.lpAttributeList = attrList;
-      ok = CreateProcess(null, commandLine, IntPtr.Zero, IntPtr.Zero, false,
+      if (Environment.GetEnvironmentVariable("GENIE_CONPTY_DEBUG") == "1") {
+        Console.Error.WriteLine("[conpty] sizeof STARTUPINFO=" + Marshal.SizeOf(typeof(STARTUPINFO)) +
+          " STARTUPINFOEX=" + Marshal.SizeOf(typeof(STARTUPINFOEX)) +
+          " attrOffset=" + Marshal.OffsetOf(typeof(STARTUPINFOEX), "lpAttributeList").ToInt64() +
+          " hPC=" + hPC.ToInt64() + " attrList=" + attrList.ToInt64());
+      }
+      SECURITY_ATTRIBUTES psa = new SECURITY_ATTRIBUTES(); psa.nLength = Marshal.SizeOf(typeof(SECURITY_ATTRIBUTES));
+      SECURITY_ATTRIBUTES tsa = new SECURITY_ATTRIBUTES(); tsa.nLength = Marshal.SizeOf(typeof(SECURITY_ATTRIBUTES));
+      ok = CreateProcess(null, commandLine, ref psa, ref tsa, false,
         EXTENDED_STARTUPINFO_PRESENT | CREATE_UNICODE_ENVIRONMENT, IntPtr.Zero, cwd, ref siex, out pi);
       if (!ok) throw new Exception("CreateProcess failed: " + Marshal.GetLastWin32Error());
       // 子进程已创建：现在才能释放 CreatePseudoConsole 用的两个端点。
