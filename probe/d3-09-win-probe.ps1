@@ -11,21 +11,24 @@ New-Item -ItemType Directory -Force -Path $ws | Out-Null
 
 $group = 'GenieWorkspace'
 $groupSid = $null
+$groupCreated = $false
 try {
-  & net localgroup $group /add 2>$null | Out-Null
-} catch { }
+  New-LocalGroup -Name $group -Description 'Genie D3-09 ACL probe' -ErrorAction Stop | Out-Null
+  $groupCreated = $true
+} catch {
+  $groupCreated = $false
+}
 try {
-  $sidBytes = ([ADSI]"WinNT://$env:COMPUTERNAME/$group,group").objectSid
-  $groupSid = (New-Object System.Security.Principal.SecurityIdentifier($sidBytes, 0)).Value
-} catch { }
-
+  $groupSid = (Get-LocalGroup -Name $group -ErrorAction Stop).SID.Value
+} catch {
+  $groupSid = $null
+}
 if (-not $groupSid) {
-  $groupSid = 'S-1-5-21-1111111111-2222222222-3333333333-1001'
-  try { $null = New-Object System.Security.Principal.SecurityIdentifier($groupSid) } catch { throw "BAD_SID $groupSid" }
+  throw 'GROUP_MISSING GenieWorkspace'
 }
 
 # Deny write to the workspace group, allow the current administrator full control.
-& icacls $ws /inheritance:r /grant:r "$($env:USERNAME):(OI)(CI)F" /deny "$($group):(OI)(CI)W" | Out-Null
+$icaclsOut = (& icacls $ws /inheritance:r /grant:r "$($env:USERNAME):(OI)(CI)F" /deny "$($group):(OI)(CI)W" 2>&1 | Out-String)
 
 try {
 $typeList = Add-Type -PassThru -ErrorAction Stop -TypeDefinition @'
@@ -123,12 +126,12 @@ public static class GenieWinProbe {
     IntPtr arr = Marshal.AllocHGlobal(Marshal.SizeOf(sa));
     Marshal.StructureToPtr(sa, arr, false);
     IntPtr current = IntPtr.Zero;
-    if (!OpenProcessToken(GetCurrentProcess(), 0x28, out current)) return "OPEN_TOKEN:" + Marshal.GetLastWin32Error();
+    if (!OpenProcessToken(GetCurrentProcess(), 0x2B, out current)) return "OPEN_TOKEN:" + Marshal.GetLastWin32Error();
     IntPtr restricted = IntPtr.Zero;
-    bool ok = CreateRestrictedToken(current, 0x8, 0, IntPtr.Zero, 0, IntPtr.Zero, 1, arr, out restricted);
+    bool ok = CreateRestrictedToken(current, 0x20, 0, IntPtr.Zero, 0, IntPtr.Zero, 1, arr, out restricted);
     int err = Marshal.GetLastWin32Error();
     CloseHandle(current); CloseHandle(sid); Marshal.FreeHGlobal(arr);
-    if (!ok) return "CREATE_RESTRICTED:" + err;
+    if (!ok) return "priv=" + priv + " CREATE_RESTRICTED:" + err;
     STARTUPINFO si = new STARTUPINFO(); si.cb = Marshal.SizeOf(si);
     PROCESS_INFORMATION pi = new PROCESS_INFORMATION();
     bool created = CreateProcessAsUser(restricted, null, cmd, IntPtr.Zero, IntPtr.Zero, false,
@@ -184,6 +187,8 @@ $result = [ordered]@{
   admin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
   group = $group
   groupSid = $groupSid
+  groupCreated = $groupCreated
+  icacls = $icaclsOut.Trim()
   acl = $null
   job = $null
 }
@@ -197,7 +202,8 @@ $acl = [ordered]@{
   restricted = [GenieWinProbe]::RunRestricted($groupSid, $base, "cmd.exe /c `"echo blocked> $blockedFile`"")
   blockedExists = (Test-Path $blockedFile)
 }
-$acl['denied'] = (-not $acl.blockedExists)
+$acl['ran'] = ($acl.restricted -match 'wait=')
+$acl['denied'] = ($acl.blockedExists -eq $false) -and $acl.ran
 $result.acl = $acl
 
 $result.job = [GenieWinProbe]::RunJob($base, "cmd.exe /c ping -n 21 127.0.0.1 > nul")
