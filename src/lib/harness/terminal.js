@@ -581,7 +581,10 @@ class TerminalSession {
     if (this.status.kind !== 'running' || !this.child) {
       throw Object.assign(new Error('终端已退出，不能再写入'), { code: 'TERMINAL_EXITED' });
     }
-    try { this.child.stdin.write(String(text || '')); } catch (e) {
+    let payload = String(text || '');
+    // ConPTY 的 console input 认 CR；只写 LF 会让 PowerShell 停在提示符不执行。
+    if (this.conpty) payload = payload.replace(/\r?\n/g, '\r\n');
+    try { this.child.stdin.write(payload); } catch (e) {
       throw Object.assign(new Error('终端写入失败：' + e.message), { code: 'TERMINAL_WRITE_FAILED' });
     }
   }
