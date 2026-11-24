@@ -28,7 +28,7 @@ if (-not $groupSid) {
 & icacls $ws /inheritance:r /grant:r "$($env:USERNAME):(OI)(CI)F" /deny "$($group):(OI)(CI)W" | Out-Null
 
 try {
-Add-Type -ErrorAction Stop -TypeDefinition @'
+$typeList = Add-Type -PassThru -ErrorAction Stop -TypeDefinition @'
 using System;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -171,6 +171,8 @@ public static class GenieWinProbe {
   }
 }
 '@
+Write-Output ("ADDTYPE_TYPES " + (($typeList | ForEach-Object { $_.FullName }) -join ','))
+if (-not ('GenieWinProbe' -as [type])) { Write-Output 'TYPE_MISSING'; exit 2 }
 } catch {
   Write-Output ("ADDTYPE_FAIL " + $_.Exception.Message)
   exit 1
