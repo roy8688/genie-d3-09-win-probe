@@ -183,12 +183,12 @@ public static class GenieSandboxRunner {
   }
 
   public static string BuildCommandLine(string[] parts) {
-    string out = "";
+    string text = "";
     for (int i = 0; i < parts.Length; i++) {
-      if (i > 0) out += " ";
-      out += Quote(parts[i]);
+      if (i > 0) text += " ";
+      text += Quote(parts[i]);
     }
-    return out;
+    return text;
   }
 
   public static int Run(string groupSid, string cwd, string[] parts, string outFile, string errFile) {
