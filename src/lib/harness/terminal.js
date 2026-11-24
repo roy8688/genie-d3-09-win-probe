@@ -251,17 +251,10 @@ function conptyRuntime() {
     _conptyProbe = { ok: false, reason: 'ConPTY 探测失败：找不到 pwsh', host };
     return _conptyProbe;
   }
-  try {
-    const inv = conptyInvocation(shellExe, process.cwd(), ['-NoLogo', '-NoProfile', '-Command', 'exit 0']);
-    const r = spawnSync(inv.command, inv.args, { encoding: 'utf8', timeout: 15000, windowsHide: true });
-    if (!r.error && r.status === 0) {
-      _conptyProbe = { ok: true, reason: 'ConPTY（CreatePseudoConsole）', host, shell: shellExe };
-    } else {
-      _conptyProbe = { ok: false, reason: 'ConPTY 探测失败：' + ((r.error && r.error.message) || ('exit=' + r.status + ' ' + String(r.stderr || '').slice(-2000))), host, shell: shellExe };
-    }
-  } catch (e) {
-    _conptyProbe = { ok: false, reason: 'ConPTY 探测异常：' + e.message, host, shell: shellExe };
-  }
+  // 不在这里跑“exit 0”探针：spawnSync 的 stdin 会立刻关闭，ConPTY 子进程会收到
+  // CTRL_C（0xC000013A），把可用环境误判成不可用。真正的能力由 PTY e2e 证明；
+  // 运行期若宿主启动失败，会话会以真实退出码结束，ptyReason 仍如实记录。
+  _conptyProbe = { ok: true, reason: 'ConPTY（CreatePseudoConsole）', host, shell: shellExe };
   return _conptyProbe;
 }
 
