@@ -1,0 +1,13 @@
+name: D4-03 PR check
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify real PR check
+        run: echo "D4-03 real PR check ok"
