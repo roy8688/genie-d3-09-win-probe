@@ -20,5 +20,6 @@ jobs:
         run: |
           node tests/fixtures/d3-11-conpty-debug.js cmd.exe
           node tests/fixtures/d3-11-conpty-debug.js pwsh.exe
+          node tests/fixtures/d3-11-conpty-console-probe.js pwsh.exe
       - name: PTY e2e
         run: node tests/fixtures/d3-11-pty-e2e.js
