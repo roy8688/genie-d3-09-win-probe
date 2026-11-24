@@ -69,6 +69,7 @@ function screenshot(file, opts = {}) {
   const cands = [
     { tool: 'grim', args: ['-t', 'png', file] },
     { tool: 'gnome-screenshot', args: ['-f', file] },
+    { tool: 'scrot', args: ['-o', file] },
     { tool: 'import', args: ['-window', 'root', file] },
   ];
   for (const c of cands) {
