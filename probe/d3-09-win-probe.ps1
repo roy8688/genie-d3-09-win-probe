@@ -194,12 +194,12 @@ Remove-Item $controlFile, $blockedFile -Force -ErrorAction SilentlyContinue
 & cmd.exe /c "echo control> $controlFile" | Out-Null
 $acl = [ordered]@{
   controlWrite = (Test-Path $controlFile)
-  restricted = (GenieWinProbe.RunRestricted $groupSid $base "cmd.exe /c `"echo blocked> $blockedFile`"")
+  restricted = [GenieWinProbe]::RunRestricted($groupSid, $base, "cmd.exe /c `"echo blocked> $blockedFile`"")
   blockedExists = (Test-Path $blockedFile)
 }
 $acl['denied'] = (-not $acl.blockedExists)
 $result.acl = $acl
 
-$result.job = GenieWinProbe.RunJob $base "cmd.exe /c ping -n 21 127.0.0.1 > nul"
+$result.job = [GenieWinProbe]::RunJob($base, "cmd.exe /c ping -n 21 127.0.0.1 > nul")
 
 Write-Result $result
