@@ -18,4 +18,5 @@ module.exports = {
   wps: require('./wps'),
   dialogs: require('./dialogs'),
   gui: require('./gui'),
+  fonts: require('./fonts'),
 };
