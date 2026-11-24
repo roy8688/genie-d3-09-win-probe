@@ -35,10 +35,13 @@ async function main() {
       command: 'cmd.exe', args: ['/c', 'echo inside> inside.txt'], cwd: ws, policy, timeoutMs: 30000,
     });
     const outsideRun = await Sandbox.run({
-      command: 'cmd.exe', args: ['/c', 'echo outside> "' + outFile + '"'], cwd: ws, policy, timeoutMs: 30000,
+      command: 'powershell.exe',
+      args: ['-NoProfile', '-Command', "[IO.File]::WriteAllText('" + outFile.replace(/'/g, "''") + "', 'outside')"],
+      cwd: ws, policy, timeoutMs: 30000,
     });
     const timed = await Sandbox.run({
-      command: 'cmd.exe', args: ['/c', 'ping -n 21 127.0.0.1 > nul & echo survived> survivor.txt'],
+      command: 'powershell.exe',
+      args: ['-NoProfile', '-Command', "Start-Sleep -Seconds 30; [IO.File]::WriteAllText('survivor.txt', 'survived')"],
       cwd: ws, policy, timeoutMs: 1000,
     });
     await new Promise((r) => setTimeout(r, 2500));
