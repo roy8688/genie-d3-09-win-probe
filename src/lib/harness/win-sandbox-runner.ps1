@@ -246,7 +246,7 @@ public static class GenieSandboxRunner {
 
       string cmdline = BuildCommandLine(parts);
       if (!CreateProcessAsUser(restricted, null, cmdline, IntPtr.Zero, IntPtr.Zero, true,
-        CREATE_SUSPENDED | CREATE_UNICODE_ENVIRONMENT | CREATE_NO_WINDOW, IntPtr.Zero, cwd, ref si, out pi)) {
+        CREATE_SUSPENDED | CREATE_UNICODE_ENVIRONMENT, IntPtr.Zero, cwd, ref si, out pi)) {
         throw new Exception("WIN_SANDBOX_CREATE_PROCESS:" + Marshal.GetLastWin32Error());
       }
       if (!AssignProcessToJobObject(job, pi.hProcess)) {
