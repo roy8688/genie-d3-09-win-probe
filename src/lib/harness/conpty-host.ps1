@@ -32,7 +32,7 @@ public class GenieConPty {
 
   [DllImport("kernel32.dll", SetLastError=true)] static extern int CreatePseudoConsole(COORD size, IntPtr hInput, IntPtr hOutput, uint flags, out IntPtr phPC);
   [DllImport("kernel32.dll")] static extern void ClosePseudoConsole(IntPtr hPC);
-  [DllImport("kernel32.dll", SetLastError=true)] static extern bool CreatePipe(out IntPtr hRead, out IntPtr hWrite, ref SECURITY_ATTRIBUTES sa, int size);
+  [DllImport("kernel32.dll", SetLastError=true)] static extern bool CreatePipe(out IntPtr hRead, out IntPtr hWrite, IntPtr sa, int size);
   [DllImport("kernel32.dll", SetLastError=true)] static extern bool SetHandleInformation(IntPtr hObject, int mask, int flags);
   [DllImport("kernel32.dll", SetLastError=true)] static extern bool CloseHandle(IntPtr hObject);
   [DllImport("kernel32.dll", SetLastError=true)] static extern bool InitializeProcThreadAttributeList(IntPtr list, int count, int flags, ref IntPtr size);
@@ -92,13 +92,9 @@ public class GenieConPty {
     STARTUPINFOEX siex = new STARTUPINFOEX();
     bool ok = false;
     try {
-      SECURITY_ATTRIBUTES sa = new SECURITY_ATTRIBUTES();
-      sa.nLength = Marshal.SizeOf(typeof(SECURITY_ATTRIBUTES));
-      sa.bInheritHandle = 1;
-      if (!CreatePipe(out inRead, out inWrite, ref sa, 0)) throw new Exception("CreatePipe(in) failed: " + Marshal.GetLastWin32Error());
-      if (!CreatePipe(out outRead, out outWrite, ref sa, 0)) throw new Exception("CreatePipe(out) failed: " + Marshal.GetLastWin32Error());
-      SetHandleInformation(inWrite, HANDLE_FLAG_INHERIT, 0);
-      SetHandleInformation(outRead, HANDLE_FLAG_INHERIT, 0);
+      // 与官方样例一致：SECURITY_ATTRIBUTES 为空，句柄默认不可继承。
+      if (!CreatePipe(out inRead, out inWrite, IntPtr.Zero, 0)) throw new Exception("CreatePipe(in) failed: " + Marshal.GetLastWin32Error());
+      if (!CreatePipe(out outRead, out outWrite, IntPtr.Zero, 0)) throw new Exception("CreatePipe(out) failed: " + Marshal.GetLastWin32Error());
 
       COORD size = new COORD(); size.X = (short)cols; size.Y = (short)rows;
       int hr = CreatePseudoConsole(size, inRead, outWrite, 0, out hPC);
