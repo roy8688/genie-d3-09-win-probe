@@ -128,7 +128,7 @@ public static class GenieWinProbe {
     IntPtr current = IntPtr.Zero;
     if (!OpenProcessToken(GetCurrentProcess(), 0x2B, out current)) return "OPEN_TOKEN:" + Marshal.GetLastWin32Error();
     IntPtr restricted = IntPtr.Zero;
-    bool ok = CreateRestrictedToken(current, 0x20, 0, IntPtr.Zero, 0, IntPtr.Zero, 1, arr, out restricted);
+    bool ok = CreateRestrictedToken(current, 0x8, 0, IntPtr.Zero, 0, IntPtr.Zero, 1, arr, out restricted);
     int err = Marshal.GetLastWin32Error();
     CloseHandle(current); CloseHandle(sid); Marshal.FreeHGlobal(arr);
     if (!ok) return "priv=" + priv + " CREATE_RESTRICTED:" + err;
