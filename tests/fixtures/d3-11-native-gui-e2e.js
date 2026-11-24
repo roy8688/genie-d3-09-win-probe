@@ -63,7 +63,7 @@ function windowTitleProbe(title) {
     } catch (e) { return { error: String(e.stderr || e.message || e) }; }
   }
   try {
-    const out = execFileSync('xdotool', ['search', '--name', title], { encoding: 'utf8', timeout: 8000 });
+    const out = execFileSync('xdotool', ['search', '--onlyvisible', '--name', title], { encoding: 'utf8', timeout: 8000 });
     const ids = out.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
     if (!ids.length) return [];
     const names = [];
@@ -201,7 +201,7 @@ async function main() {
   });
   checks.push({
     name: 'dialog-screenshot',
-    ok: !!(capture && capture.ok && fs.existsSync(shot) && (size.width > 0 || size.bytes > 0) && visible),
+    ok: !!(capture && capture.ok && fs.existsSync(shot) && (size.width > 0 || size.bytes >= 20000) && visible),
     detail: { capture, size, diff },
   });
 
