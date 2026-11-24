@@ -11,6 +11,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Run product sandbox runner e2e
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Write-Output "WIN_E2E_START"
+          node probe/win-runner-e2e.js
+          Write-Output "WIN_E2E_END exit=$LASTEXITCODE"
+
       - name: Run D3-09 probe
         shell: powershell
         run: |
