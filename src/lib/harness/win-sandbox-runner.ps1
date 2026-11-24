@@ -290,18 +290,18 @@ try {
   $groupSid = (Get-LocalGroup -Name $groupName).SID.Value
   $user = $identity.Name
 
-  $grant = @("$user:(OI)(CI)F")
-  if ($mode -eq 'workspace-write') { $grant += "$groupName:(OI)(CI)F" } else { $grant += "$groupName:(OI)(CI)R" }
+  $grant = @("${user}:(OI)(CI)F")
+  if ($mode -eq 'workspace-write') { $grant += "${groupName}:(OI)(CI)F" } else { $grant += "${groupName}:(OI)(CI)R" }
   & icacls.exe $workspace /inheritance:r /grant:r $grant | Out-Null
   if ($LASTEXITCODE -ne 0) { throw ('WIN_SANDBOX_ICACLS_WORKSPACE:' + $LASTEXITCODE) }
 
   if ($tempDir -and (Test-Path -LiteralPath $tempDir)) {
-    & icacls.exe $tempDir /inheritance:r /grant:r "$user:(OI)(CI)F" "$groupName:(OI)(CI)F" | Out-Null
+    & icacls.exe $tempDir /inheritance:r /grant:r "${user}:(OI)(CI)F" "${groupName}:(OI)(CI)F" | Out-Null
     if ($LASTEXITCODE -ne 0) { throw ('WIN_SANDBOX_ICACLS_TEMP:' + $LASTEXITCODE) }
   }
   foreach ($root in $extraRoots) {
     if ($root -and (Test-Path -LiteralPath $root)) {
-      & icacls.exe $root /grant:r "$groupName:(OI)(CI)F" | Out-Null
+      & icacls.exe $root /grant:r "${groupName}:(OI)(CI)F" | Out-Null
       if ($LASTEXITCODE -ne 0) { throw ('WIN_SANDBOX_ICACLS_EXTRA:' + $LASTEXITCODE) }
     }
   }
