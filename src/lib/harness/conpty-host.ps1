@@ -41,6 +41,9 @@ public class GenieConPty {
   [DllImport("kernel32.dll", SetLastError=true, CharSet=CharSet.Unicode, ExactSpelling=true)]
   static extern bool CreateProcessW(string app, string cmd, IntPtr pa, IntPtr ta, bool inherit, uint flags, IntPtr env, string cwd, IntPtr si, out PROCESS_INFORMATION pi);
   [DllImport("kernel32.dll")] static extern IntPtr GetConsoleWindow();
+  [DllImport("kernel32.dll", SetLastError=true)] static extern bool AllocConsole();
+  [DllImport("kernel32.dll", SetLastError=true)] static extern IntPtr GetStdHandle(int n);
+  [DllImport("kernel32.dll", SetLastError=true)] static extern bool SetStdHandle(int n, IntPtr h);
   [DllImport("kernel32.dll", SetLastError=true)] static extern uint WaitForSingleObject(IntPtr h, uint ms);
   [DllImport("kernel32.dll", SetLastError=true)] static extern bool GetExitCodeProcess(IntPtr h, out int code);
   [DllImport("kernel32.dll", SetLastError=true)] static extern bool ReadFile(IntPtr h, byte[] buf, uint n, out uint got, IntPtr ov);
@@ -92,6 +95,13 @@ public class GenieConPty {
     PROCESS_INFORMATION pi = new PROCESS_INFORMATION();
     STARTUPINFOEX siex = new STARTUPINFOEX();
     bool ok = false;
+    IntPtr savedIn = GetStdHandle(-10), savedOut = GetStdHandle(-11), savedErr = GetStdHandle(-12);
+    if (GetConsoleWindow() == IntPtr.Zero) {
+      AllocConsole();
+      SetStdHandle(-10, savedIn); SetStdHandle(-11, savedOut); SetStdHandle(-12, savedErr);
+      if (Environment.GetEnvironmentVariable("GENIE_CONPTY_DEBUG") == "1")
+        Console.Error.WriteLine("[conpty] AllocConsole -> consoleWnd=" + GetConsoleWindow().ToInt64());
+    }
     try {
       // 与官方样例一致：SECURITY_ATTRIBUTES 为空，句柄默认不可继承。
       if (!CreatePipe(out inRead, out inWrite, IntPtr.Zero, 0)) throw new Exception("CreatePipe(in) failed: " + Marshal.GetLastWin32Error());
