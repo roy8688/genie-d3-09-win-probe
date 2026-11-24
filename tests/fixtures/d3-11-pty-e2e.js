@@ -96,7 +96,12 @@ async function main() {
     }
   } finally {
     try { Terminal.kill(s.id, 'd3-11-pty', 'SIGKILL'); } catch (_) {}
-    fs.rmSync(ws, { recursive: true, force: true });
+    // Windows 在 ConPTY 退出时会短暂占住临时目录（EBUSY），清理必须重试且不因此判红。
+    try {
+      fs.rmSync(ws, { recursive: true, force: true, maxRetries: 8, retryDelay: 150 });
+    } catch (e) {
+      console.log('D3_11_PTY_CLEANUP_WARN ' + String(e.message || e));
+    }
     Terminal.shutdown();
   }
   await sleep(50);
